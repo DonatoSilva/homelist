@@ -19,7 +19,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 18
-      - run: npm ci
+      - name: Install dependencies (detect Bun or fallback to npm)
+        run: |
+          if [ -f bun.lockb ]; then
+            echo "Detected bun.lockb — installing Bun and running bun install"
+            curl -fsSL https://bun.sh/install | bash
+            echo "$HOME/.bun/bin" >> $GITHUB_PATH
+            export PATH="$HOME/.bun/bin:$PATH"
+            bun --version || true
+            bun install
+          elif [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+            echo "Found npm lockfile — running 'npm ci'"
+            npm ci
+          else
+            echo "No lockfile found — running 'npm install'"
+            npm install --no-audit --no-fund
+          fi
       - name: Configure git for commits
         run: |
           git config user.name "github-actions[bot]"
@@ -28,7 +43,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm run release
+          if [ -f bun.lockb ]; then
+            bun run release
+          else
+            npm run release
+          fi
           git push --follow-tags origin HEAD
       - name: Get new tag
         id: get_tag
